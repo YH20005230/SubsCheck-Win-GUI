@@ -33,6 +33,10 @@
             this.notifyIcon1 = new System.Windows.Forms.NotifyIcon(this.components);
             this.timer1 = new System.Windows.Forms.Timer(this.components);
             this.groupBox1 = new System.Windows.Forms.GroupBox();
+            this.checkBox5 = new System.Windows.Forms.CheckBox();
+            this.textBox11 = new System.Windows.Forms.TextBox();
+            this.button7 = new System.Windows.Forms.Button();
+            this.button6 = new System.Windows.Forms.Button();
             this.comboBox4 = new System.Windows.Forms.ComboBox();
             this.button3 = new System.Windows.Forms.Button();
             this.textBox1 = new System.Windows.Forms.TextBox();
@@ -56,9 +60,13 @@
             this.numericUpDown7 = new System.Windows.Forms.NumericUpDown();
             this.label20 = new System.Windows.Forms.Label();
             this.groupBox2 = new System.Windows.Forms.GroupBox();
+            this.linkLabel1 = new System.Windows.Forms.LinkLabel();
             this.button5 = new System.Windows.Forms.Button();
             this.richTextBox1 = new System.Windows.Forms.RichTextBox();
             this.groupBox3 = new System.Windows.Forms.GroupBox();
+            this.button8 = new System.Windows.Forms.Button();
+            this.textBox10 = new System.Windows.Forms.TextBox();
+            this.checkBox4 = new System.Windows.Forms.CheckBox();
             this.numericUpDown8 = new System.Windows.Forms.NumericUpDown();
             this.checkBox3 = new System.Windows.Forms.CheckBox();
             this.button4 = new System.Windows.Forms.Button();
@@ -93,6 +101,7 @@
             this.textBox9 = new System.Windows.Forms.TextBox();
             this.label18 = new System.Windows.Forms.Label();
             this.timer3 = new System.Windows.Forms.Timer(this.components);
+            this.timer4 = new System.Windows.Forms.Timer(this.components);
             this.groupBox1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDown4)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDown3)).BeginInit();
@@ -120,10 +129,15 @@
             // timer1
             // 
             this.timer1.Enabled = true;
+            this.timer1.Interval = 1;
             this.timer1.Tick += new System.EventHandler(this.timer1_Tick);
             // 
             // groupBox1
             // 
+            this.groupBox1.Controls.Add(this.checkBox5);
+            this.groupBox1.Controls.Add(this.textBox11);
+            this.groupBox1.Controls.Add(this.button7);
+            this.groupBox1.Controls.Add(this.button6);
             this.groupBox1.Controls.Add(this.comboBox4);
             this.groupBox1.Controls.Add(this.button3);
             this.groupBox1.Controls.Add(this.textBox1);
@@ -147,6 +161,51 @@
             this.groupBox1.TabStop = false;
             this.groupBox1.Text = "参数设置";
             // 
+            // checkBox5
+            // 
+            this.checkBox5.AutoSize = true;
+            this.checkBox5.Location = new System.Drawing.Point(91, 428);
+            this.checkBox5.Name = "checkBox5";
+            this.checkBox5.Size = new System.Drawing.Size(72, 16);
+            this.checkBox5.TabIndex = 30;
+            this.checkBox5.Text = "开机自启";
+            this.checkBox5.UseVisualStyleBackColor = true;
+            this.checkBox5.CheckedChanged += new System.EventHandler(this.checkBox5_CheckedChanged);
+            // 
+            // textBox11
+            // 
+            this.textBox11.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.textBox11.Location = new System.Drawing.Point(9, 343);
+            this.textBox11.Name = "textBox11";
+            this.textBox11.Size = new System.Drawing.Size(154, 21);
+            this.textBox11.TabIndex = 21;
+            this.textBox11.Text = "0 */2 * * *";
+            this.textBox11.Visible = false;
+            this.textBox11.DoubleClick += new System.EventHandler(this.切换cron表达式);
+            this.textBox11.Leave += new System.EventHandler(this.textBox11_Leave);
+            // 
+            // button7
+            // 
+            this.button7.Enabled = false;
+            this.button7.Location = new System.Drawing.Point(7, 399);
+            this.button7.Name = "button7";
+            this.button7.Size = new System.Drawing.Size(75, 23);
+            this.button7.TabIndex = 30;
+            this.button7.Text = "🔀未启动";
+            this.button7.UseVisualStyleBackColor = true;
+            this.button7.Click += new System.EventHandler(this.button7_Click);
+            // 
+            // button6
+            // 
+            this.button6.Enabled = false;
+            this.button6.Location = new System.Drawing.Point(88, 399);
+            this.button6.Name = "button6";
+            this.button6.Size = new System.Drawing.Size(75, 23);
+            this.button6.TabIndex = 29;
+            this.button6.Text = "访问WebUI";
+            this.button6.UseVisualStyleBackColor = true;
+            this.button6.Click += new System.EventHandler(this.button6_Click);
+            // 
             // comboBox4
             // 
             this.comboBox4.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
@@ -154,7 +213,7 @@
             this.comboBox4.Items.AddRange(new object[] {
             "通用订阅",
             "Clash"});
-            this.comboBox4.Location = new System.Drawing.Point(8, 423);
+            this.comboBox4.Location = new System.Drawing.Point(8, 372);
             this.comboBox4.Name = "comboBox4";
             this.comboBox4.Size = new System.Drawing.Size(74, 20);
             this.comboBox4.TabIndex = 19;
@@ -162,7 +221,7 @@
             // button3
             // 
             this.button3.Enabled = false;
-            this.button3.Location = new System.Drawing.Point(88, 421);
+            this.button3.Location = new System.Drawing.Point(88, 370);
             this.button3.Name = "button3";
             this.button3.Size = new System.Drawing.Size(75, 23);
             this.button3.TabIndex = 18;
@@ -177,7 +236,7 @@
             this.textBox1.Multiline = true;
             this.textBox1.Name = "textBox1";
             this.textBox1.ReadOnly = true;
-            this.textBox1.Size = new System.Drawing.Size(154, 236);
+            this.textBox1.Size = new System.Drawing.Size(154, 185);
             this.textBox1.TabIndex = 17;
             this.textBox1.Text = resources.GetString("textBox1.Text");
             this.textBox1.WordWrap = false;
@@ -264,6 +323,7 @@
             0,
             0,
             0});
+            this.numericUpDown2.DoubleClick += new System.EventHandler(this.切换cron表达式);
             // 
             // numericUpDown1
             // 
@@ -323,6 +383,7 @@
             this.label2.Size = new System.Drawing.Size(101, 12);
             this.label2.TabIndex = 3;
             this.label2.Text = "检查间隔(分钟)：";
+            this.label2.DoubleClick += new System.EventHandler(this.切换cron表达式);
             // 
             // label1
             // 
@@ -346,11 +407,11 @@
             // button1
             // 
             this.button1.Font = new System.Drawing.Font("宋体", 9F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
-            this.button1.Location = new System.Drawing.Point(7, 450);
+            this.button1.Location = new System.Drawing.Point(7, 428);
             this.button1.Name = "button1";
-            this.button1.Size = new System.Drawing.Size(75, 23);
+            this.button1.Size = new System.Drawing.Size(75, 45);
             this.button1.TabIndex = 0;
-            this.button1.Text = "启动";
+            this.button1.Text = "▶️ 启动";
             this.button1.UseVisualStyleBackColor = true;
             this.button1.Click += new System.EventHandler(this.button1_Click);
             // 
@@ -461,6 +522,7 @@
             // 
             // groupBox2
             // 
+            this.groupBox2.Controls.Add(this.linkLabel1);
             this.groupBox2.Controls.Add(this.button5);
             this.groupBox2.Controls.Add(this.richTextBox1);
             this.groupBox2.Location = new System.Drawing.Point(193, 13);
@@ -469,6 +531,17 @@
             this.groupBox2.TabIndex = 1;
             this.groupBox2.TabStop = false;
             this.groupBox2.Text = "实时日志";
+            // 
+            // linkLabel1
+            // 
+            this.linkLabel1.AutoSize = true;
+            this.linkLabel1.Location = new System.Drawing.Point(460, 2);
+            this.linkLabel1.Name = "linkLabel1";
+            this.linkLabel1.Size = new System.Drawing.Size(137, 12);
+            this.linkLabel1.TabIndex = 21;
+            this.linkLabel1.TabStop = true;
+            this.linkLabel1.Text = "关于 SubsCheck Win GUI";
+            this.linkLabel1.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel1_LinkClicked);
             // 
             // button5
             // 
@@ -490,9 +563,13 @@
             this.richTextBox1.Size = new System.Drawing.Size(594, 464);
             this.richTextBox1.TabIndex = 0;
             this.richTextBox1.Text = "";
+            this.richTextBox1.DoubleClick += new System.EventHandler(this.richTextBox1_DoubleClick);
             // 
             // groupBox3
             // 
+            this.groupBox3.Controls.Add(this.button8);
+            this.groupBox3.Controls.Add(this.textBox10);
+            this.groupBox3.Controls.Add(this.checkBox4);
             this.groupBox3.Controls.Add(this.numericUpDown8);
             this.groupBox3.Controls.Add(this.checkBox3);
             this.groupBox3.Controls.Add(this.button4);
@@ -512,10 +589,45 @@
             this.groupBox3.Controls.Add(this.label20);
             this.groupBox3.Location = new System.Drawing.Point(13, 503);
             this.groupBox3.Name = "groupBox3";
-            this.groupBox3.Size = new System.Drawing.Size(780, 106);
+            this.groupBox3.Size = new System.Drawing.Size(780, 103);
             this.groupBox3.TabIndex = 2;
             this.groupBox3.TabStop = false;
             this.groupBox3.Text = "高级设置";
+            this.groupBox3.Visible = false;
+            // 
+            // button8
+            // 
+            this.button8.Location = new System.Drawing.Point(695, 43);
+            this.button8.Name = "button8";
+            this.button8.Size = new System.Drawing.Size(75, 23);
+            this.button8.TabIndex = 29;
+            this.button8.Text = "补充参数";
+            this.button8.UseVisualStyleBackColor = true;
+            this.button8.Click += new System.EventHandler(this.button8_Click);
+            // 
+            // textBox10
+            // 
+            this.textBox10.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
+            this.textBox10.Enabled = false;
+            this.textBox10.Location = new System.Drawing.Point(141, 73);
+            this.textBox10.Name = "textBox10";
+            this.textBox10.PasswordChar = '*';
+            this.textBox10.Size = new System.Drawing.Size(110, 21);
+            this.textBox10.TabIndex = 6;
+            this.textBox10.Text = "admin";
+            this.textBox10.Enter += new System.EventHandler(this.textBox10_Enter);
+            this.textBox10.Leave += new System.EventHandler(this.textBox10_Leave);
+            // 
+            // checkBox4
+            // 
+            this.checkBox4.AutoSize = true;
+            this.checkBox4.Location = new System.Drawing.Point(9, 75);
+            this.checkBox4.Name = "checkBox4";
+            this.checkBox4.Size = new System.Drawing.Size(138, 16);
+            this.checkBox4.TabIndex = 28;
+            this.checkBox4.Text = "启用WebUI API密钥：";
+            this.checkBox4.UseVisualStyleBackColor = true;
+            this.checkBox4.CheckedChanged += new System.EventHandler(this.checkBox4_CheckedChanged);
             // 
             // numericUpDown8
             // 
@@ -607,17 +719,16 @@
                 "line_Full_WithIcon.yaml",
             "https://fastly.jsdelivr.net/gh/mihomo-party-org/override-hub@main/yaml/添加直连规则.yam" +
                 "l"});
-            this.comboBox5.Location = new System.Drawing.Point(152, 73);
+            this.comboBox5.Location = new System.Drawing.Point(414, 73);
             this.comboBox5.Name = "comboBox5";
-            this.comboBox5.Size = new System.Drawing.Size(538, 20);
+            this.comboBox5.Size = new System.Drawing.Size(275, 20);
             this.comboBox5.TabIndex = 24;
-            this.comboBox5.Text = "[内置]布丁狗的订阅转换";
             this.comboBox5.SelectedIndexChanged += new System.EventHandler(this.comboBox5_SelectedIndexChanged);
             // 
             // label19
             // 
             this.label19.AutoSize = true;
-            this.label19.Location = new System.Drawing.Point(7, 76);
+            this.label19.Location = new System.Drawing.Point(260, 76);
             this.label19.Name = "label19";
             this.label19.Size = new System.Drawing.Size(149, 12);
             this.label19.TabIndex = 23;
@@ -1072,20 +1183,17 @@
             "tpe.corpa.me",
             "tube.20140301.xyz",
             "vps.pansen626.com",
-            "wfgithub.xiaonuomi.ie.eu.org",
-            "www.leertai.top",
-            "www.zyq.cloudns.org"});
-            this.comboBox3.Location = new System.Drawing.Point(590, 19);
+            "wfgithub.xiaonuomi.ie.eu.org"});
+            this.comboBox3.Location = new System.Drawing.Point(600, 19);
             this.comboBox3.Name = "comboBox3";
-            this.comboBox3.Size = new System.Drawing.Size(180, 20);
+            this.comboBox3.Size = new System.Drawing.Size(170, 20);
             this.comboBox3.TabIndex = 21;
-            this.comboBox3.Text = "自动选择";
             this.comboBox3.Leave += new System.EventHandler(this.comboBox3_Leave);
             // 
             // label10
             // 
             this.label10.AutoSize = true;
-            this.label10.Location = new System.Drawing.Point(500, 21);
+            this.label10.Location = new System.Drawing.Point(505, 21);
             this.label10.Name = "label10";
             this.label10.Size = new System.Drawing.Size(89, 12);
             this.label10.TabIndex = 20;
@@ -1103,7 +1211,7 @@
                 ".25067-el9.aarch64.rpm"});
             this.comboBox2.Location = new System.Drawing.Point(414, 45);
             this.comboBox2.Name = "comboBox2";
-            this.comboBox2.Size = new System.Drawing.Size(356, 20);
+            this.comboBox2.Size = new System.Drawing.Size(275, 20);
             this.comboBox2.TabIndex = 19;
             this.comboBox2.Text = "https://github.com/AaronFeng753/Waifu2x-Extension-GUI/releases/download/v2.21.12/" +
     "Waifu2x-Extension-GUI-v2.21.12-Portable.7z";
@@ -1137,7 +1245,7 @@
             this.groupBox4.Controls.Add(this.label12);
             this.groupBox4.Controls.Add(this.textBox2);
             this.groupBox4.Controls.Add(this.label11);
-            this.groupBox4.Location = new System.Drawing.Point(13, 615);
+            this.groupBox4.Location = new System.Drawing.Point(13, 612);
             this.groupBox4.Name = "groupBox4";
             this.groupBox4.Size = new System.Drawing.Size(780, 51);
             this.groupBox4.TabIndex = 4;
@@ -1209,7 +1317,7 @@
             this.groupBox5.Controls.Add(this.label15);
             this.groupBox5.Controls.Add(this.textBox7);
             this.groupBox5.Controls.Add(this.label16);
-            this.groupBox5.Location = new System.Drawing.Point(13, 672);
+            this.groupBox5.Location = new System.Drawing.Point(13, 669);
             this.groupBox5.Name = "groupBox5";
             this.groupBox5.Size = new System.Drawing.Size(780, 51);
             this.groupBox5.TabIndex = 6;
@@ -1263,7 +1371,7 @@
             this.groupBox6.Controls.Add(this.label17);
             this.groupBox6.Controls.Add(this.textBox9);
             this.groupBox6.Controls.Add(this.label18);
-            this.groupBox6.Location = new System.Drawing.Point(13, 729);
+            this.groupBox6.Location = new System.Drawing.Point(13, 726);
             this.groupBox6.Name = "groupBox6";
             this.groupBox6.Size = new System.Drawing.Size(780, 51);
             this.groupBox6.TabIndex = 6;
@@ -1330,13 +1438,18 @@
             this.timer3.Interval = 86400000;
             this.timer3.Tick += new System.EventHandler(this.timer3_Tick);
             // 
+            // timer4
+            // 
+            this.timer4.Interval = 1000;
+            this.timer4.Tick += new System.EventHandler(this.timer4_Tick);
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.AutoSize = true;
             this.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
-            this.ClientSize = new System.Drawing.Size(800, 789);
+            this.ClientSize = new System.Drawing.Size(800, 784);
             this.Controls.Add(this.groupBox6);
             this.Controls.Add(this.groupBox5);
             this.Controls.Add(this.groupBox4);
@@ -1358,6 +1471,7 @@
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDown5)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDown7)).EndInit();
             this.groupBox2.ResumeLayout(false);
+            this.groupBox2.PerformLayout();
             this.groupBox3.ResumeLayout(false);
             this.groupBox3.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numericUpDown8)).EndInit();
@@ -1436,6 +1550,15 @@
         private System.Windows.Forms.Button button4;
         private System.Windows.Forms.NumericUpDown numericUpDown8;
         private System.Windows.Forms.CheckBox checkBox3;
+        private System.Windows.Forms.TextBox textBox10;
+        private System.Windows.Forms.CheckBox checkBox4;
+        private System.Windows.Forms.Button button6;
+        private System.Windows.Forms.Timer timer4;
+        private System.Windows.Forms.Button button7;
+        private System.Windows.Forms.TextBox textBox11;
+        private System.Windows.Forms.LinkLabel linkLabel1;
+        private System.Windows.Forms.Button button8;
+        private System.Windows.Forms.CheckBox checkBox5;
     }
 }
 

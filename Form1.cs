@@ -12,8 +12,6 @@ using System.Net.NetworkInformation;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using YamlDotNet.Core;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement.ProgressBar;
 
 namespace subs_check.win.gui
 {
@@ -31,13 +29,17 @@ namespace subs_check.win.gui
         string 当前subsCheck版本号 = "未知版本";
         string 当前GUI版本号 = "未知版本";
         string 最新GUI版本号 = "未知版本";
+        private string nextCheckTime = null;// 用于存储下次检查时间
+        string WebUIapiKey = "CMLiussss";
         public Form1()
         {
             InitializeComponent();
             originalNotifyIcon = notifyIcon1.Icon;
 
             toolTip1.SetToolTip(numericUpDown1, "并发线程数：推荐 宽带峰值/50M。");
-            toolTip1.SetToolTip(numericUpDown2, "检查间隔时间(分钟)：放置后台的时候，下次自动测速的间隔时间。");
+            toolTip1.SetToolTip(numericUpDown2, "检查间隔时间(分钟)：放置后台的时候，下次自动测速的间隔时间。\n\n 双击切换 使用「cron表达式」");
+            toolTip1.SetToolTip(label2, "检查间隔时间(分钟)：放置后台的时候，下次自动测速的间隔时间。\n\n 双击切换 使用「cron表达式」");
+
             toolTip1.SetToolTip(numericUpDown3, "超时时间(毫秒)：节点的最大延迟。");
             toolTip1.SetToolTip(numericUpDown4, "最低测速结果舍弃(KB/s)。");
             toolTip1.SetToolTip(numericUpDown5, "下载测试时间(s)：与下载链接大小相关，默认最大测试10s。");
@@ -59,6 +61,10 @@ namespace subs_check.win.gui
 
             toolTip1.SetToolTip(checkBox3, "保存几个成功的节点，不选代表不限制，内核版本需要 v2.1.0 以上\n如果你的并发数量超过这个参数，那么成功的结果可能会大于这个数值");
             toolTip1.SetToolTip(numericUpDown8, "保存几个成功的节点，不选代表不限制，内核版本需要 v2.1.0 以上\n如果你的并发数量超过这个参数，那么成功的结果可能会大于这个数值");
+
+            toolTip1.SetToolTip(textBox11, "支持标准cron表达式，如：\n 0 */2 * * * 表示每2小时的整点执行\n 0 0 */2 * * 表示每2天的0点执行\n 0 0 1 * * 表示每月1日0点执行\n */30 * * * * 表示每30分钟执行一次\n\n 双击切换 使用「分钟倒计时」");
+
+            toolTip1.SetToolTip(checkBox5, "开机启动：勾选后，程序将在Windows启动时自动运行");
             // 设置通知图标的上下文菜单
             SetupNotifyIconContextMenu();
         }
@@ -68,21 +74,21 @@ namespace subs_check.win.gui
             // 创建上下文菜单
             ContextMenuStrip contextMenu = new ContextMenuStrip();
 
-            // 创建"启动"菜单项
+            // 创建"▶️ 启动"菜单项
             startMenuItem = new ToolStripMenuItem("启动");
             startMenuItem.Click += (sender, e) =>
             {
-                if (button1.Text == "启动")
+                if (button1.Text == "▶️ 启动")
                 {
                     button1_Click(sender, e);
                 }
             };
 
-            // 创建"停止"菜单项
+            // 创建"⏹️ 停止"菜单项
             stopMenuItem = new ToolStripMenuItem("停止");
             stopMenuItem.Click += (sender, e) =>
             {
-                if (button1.Text == "停止")
+                if (button1.Text == "⏹️ 停止")
                 {
                     button1_Click(sender, e);
                 }
@@ -170,20 +176,18 @@ namespace subs_check.win.gui
             当前GUI版本号 = "v" + myFileVersionInfo.FileVersion;
             最新GUI版本号 = 当前GUI版本号;
             标题 = "SubsCheck Win GUI " + 当前GUI版本号;
-            this.Text = 标题 + " TG:CMLiussss BY:CM喂饭 干货满满";
+            this.Text = 标题;// + " TG:CMLiussss BY:CM喂饭 干货满满";
             comboBox1.Text = "本地";
             comboBox4.Text = "通用订阅";
             ReadConfig();
-            /*
-            string subsCheckPath = Path.Combine(executablePath, "subs-check.exe");
-            if (File.Exists(subsCheckPath)) button1.Enabled = true;
-            else 
+
+            if (CheckCommandLineParameter("-auto"))
             {
-                Log("没有找到 subs-check.exe 文件。", true);
-                MessageBox.Show("缺少 subs-check.exe 核心文件。\n\n您可以前往 https://github.com/beck-8/subs-check/releases 自行下载！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            */
-            await CheckGitHubVersionAsync();
+                Log("检测到开机启动，准备执行任务...");
+                button1_Click(this, EventArgs.Empty);
+                this.Hide();
+                notifyIcon1.Visible = true;
+            } else await CheckGitHubVersionAsync();
         }
 
         private async Task CheckGitHubVersionAsync()
@@ -249,6 +253,7 @@ namespace subs_check.win.gui
 
         private async void ReadConfig()//读取配置文件
         {
+            checkBox5.CheckedChanged -= checkBox5_CheckedChanged;// 临时移除事件处理器，防止触发事件
             try
             {
                 string executablePath = Path.GetDirectoryName(System.Windows.Forms.Application.ExecutablePath);
@@ -280,13 +285,13 @@ namespace subs_check.win.gui
                     if (downloadtimeoutValue.HasValue) numericUpDown5.Value = downloadtimeoutValue.Value;
 
                     string speedTestUrl = 读取config字符串(config, "speed-test-url");
-                    if (speedTestUrl != null)  comboBox2.Text = speedTestUrl;
+                    if (speedTestUrl != null) comboBox2.Text = speedTestUrl;
 
                     string savemethod = 读取config字符串(config, "save-method");
                     if (savemethod != null)
                     {
                         if (savemethod == "local") comboBox1.Text = "本地";
-                        else  comboBox1.Text = savemethod;
+                        else comboBox1.Text = savemethod;
                     }
 
                     string listenport = 读取config字符串(config, "listen-port");
@@ -333,24 +338,24 @@ namespace subs_check.win.gui
 
                     string mihomoOverwriteUrl = 读取config字符串(config, "mihomo-overwrite-url");
                     int mihomoOverwriteUrlIndex = mihomoOverwriteUrl.IndexOf(githubRawPrefix);
-                    if (mihomoOverwriteUrl != null) 
+                    if (mihomoOverwriteUrl != null)
                     {
-                        if (mihomoOverwriteUrl.Contains("http://127.0.0")) 
+                        if (mihomoOverwriteUrl.Contains("http://127.0.0"))
                         {
                             if (mihomoOverwriteUrl.EndsWith("bdg.yaml", StringComparison.OrdinalIgnoreCase))
                             {
                                 comboBox5.Text = "[内置]布丁狗的订阅转换";
                                 await ProcessComboBox5Selection();
                             }
-                            else if (mihomoOverwriteUrl.EndsWith("ACL4SSR_Online_Full.yaml", StringComparison.OrdinalIgnoreCase)) 
+                            else if (mihomoOverwriteUrl.EndsWith("ACL4SSR_Online_Full.yaml", StringComparison.OrdinalIgnoreCase))
                             {
                                 comboBox5.Text = "[内置]ACL4SSR_Online_Full";
                                 await ProcessComboBox5Selection();
                             }
-                        } 
+                        }
                         else if (mihomoOverwriteUrlIndex > 0) comboBox5.Text = mihomoOverwriteUrl.Substring(mihomoOverwriteUrlIndex);
                         else comboBox5.Text = mihomoOverwriteUrl;
-                    } 
+                    }
 
                     // 处理URLs，检查是否包含GitHub raw链接
                     List<string> subUrls = 读取config列表(config, "sub-urls");
@@ -416,7 +421,7 @@ namespace subs_check.win.gui
                     if (subscheckversion != null) 当前subsCheck版本号 = subscheckversion;
 
                     int? successlimit = 读取config整数(config, "success-limit");
-                    if (successlimit.HasValue) 
+                    if (successlimit.HasValue)
                     {
                         if (successlimit.Value == 0)
                         {
@@ -428,8 +433,56 @@ namespace subs_check.win.gui
                             checkBox3.Checked = true;
                             numericUpDown8.Enabled = true;
                             numericUpDown8.Value = successlimit.Value;
-                        }   
+                        }
                     }
+
+                    string enablewebui = 读取config字符串(config, "enable-web-ui");
+                    if (enablewebui != null && enablewebui == "true") checkBox4.Checked = true;
+                    else checkBox4.Checked = false;
+
+                    string apikey = 读取config字符串(config, "api-key");
+                    if (apikey != null)
+                    {
+                        if (apikey == GetComputerNameMD5())
+                        {
+                            checkBox4.Checked = false;
+                            string oldapikey = 读取config字符串(config, "old-api-key");
+                            if (oldapikey != null)
+                            {
+                                textBox10.Text = oldapikey;
+                            }
+                            else
+                            {
+                                textBox10.PasswordChar = '\0';
+                                textBox10.Text = "请输入密钥";
+                                textBox10.ForeColor = Color.Gray;
+                            }
+                        }
+                        else
+                        {
+                            textBox10.Text = apikey;
+                        }
+                    }
+
+                    string cronexpression = 读取config字符串(config, "cron-expression");
+                    if (cronexpression != null)
+                    {
+                        textBox11.Text = cronexpression;
+                        string cronDescription = GetCronExpressionDescription(textBox11.Text);
+                        textBox11.Location = new Point(9, 48);
+                        textBox11.Visible = true;
+                        label2.Visible = false;
+                        numericUpDown2.Visible = false;
+                    }
+
+                    string guiauto = 读取config字符串(config, "gui-auto");
+                    if (guiauto != null && guiauto == "true") checkBox5.Checked = true;
+                    else checkBox5.Checked = false;
+                }
+                else
+                {
+                    comboBox3.Text = "自动选择";
+                    comboBox5.Text = "[内置]布丁狗的订阅转换";
                 }
             }
             catch (Exception ex)
@@ -437,6 +490,7 @@ namespace subs_check.win.gui
                 MessageBox.Show($"读取配置文件时发生错误: {ex.Message}", "错误",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+            checkBox5.CheckedChanged += checkBox5_CheckedChanged;// 重新绑定事件处理器
         }
 
         private int? 读取config整数(Dictionary<string, object> config, string fieldName)
@@ -488,6 +542,7 @@ namespace subs_check.win.gui
                 // 从UI控件获取值并添加到字典中
                 config["concurrent"] = (int)numericUpDown1.Value;
                 config["check-interval"] = (int)numericUpDown2.Value;
+                if (textBox11.Visible) config["cron-expression"] = textBox11.Text;
                 config["timeout"] = (int)numericUpDown3.Value;
                 config["min-speed"] = (int)numericUpDown4.Value;
                 config["download-timeout"] = (int)numericUpDown5.Value;
@@ -512,13 +567,25 @@ namespace subs_check.win.gui
                 config["webdav-password"] = textBox8.Text;
                 config["webdav-url"] = textBox5.Text;
 
+                // 保存enable-web-ui
+                config["enable-web-ui"] = true;
+
                 // 保存listen-port
-                config["listen-port"] = $@"127.0.0.1:{numericUpDown6.Value}";
+                if (checkBox4.Checked) 
+                {
+                    WebUIapiKey = textBox10.Text;
+                    config["listen-port"] = $@":{numericUpDown6.Value}";
+                }
+                else
+                {
+                    WebUIapiKey = GetComputerNameMD5();
+                    config["listen-port"] = $@"127.0.0.1:{numericUpDown6.Value}";
+                    if (textBox10.Text != "请输入密钥") config["old-api-key"] = textBox10.Text;
+                }
+                config["api-key"] = WebUIapiKey;
+
                 // 保存sub-store-port
                 config["sub-store-port"] = $@":{numericUpDown7.Value}";
-
-                // 保存githubproxy
-                config["githubproxy"] = comboBox3.Text;
 
                 string githubRawPrefix = "https://raw.githubusercontent.com/";
                 if (githubProxyCheck)
@@ -543,9 +610,10 @@ namespace subs_check.win.gui
                         githubProxyURL = await DetectGitHubProxyAsync(proxyItems);
                     }
                 }
-                else if(comboBox3.Text == "自动选择") githubProxyURL = "";
 
                 if (comboBox3.Text != "自动选择") githubProxyURL = $"https://{comboBox3.Text}/";
+                config["githubproxy"] = comboBox3.Text;
+                config["github-proxy"] = githubProxyURL;
 
                 // 保存sub-urls列表
                 List<string> subUrls = new List<string>();
@@ -565,7 +633,9 @@ namespace subs_check.win.gui
                         if (subUrls[i].StartsWith(githubRawPrefix) && !string.IsNullOrEmpty(githubProxyURL))
                         {
                             // 替换为代理 URL 格式
-                            subUrls[i] = githubProxyURL + githubRawPrefix + subUrls[i].Substring(githubRawPrefix.Length);
+                            //subUrls[i] = githubProxyURL + githubRawPrefix + subUrls[i].Substring(githubRawPrefix.Length);
+                            // 使用subs-check内置github-proxy参数
+                            subUrls[i] = githubRawPrefix + subUrls[i].Substring(githubRawPrefix.Length);
                         }
                     }
                 }
@@ -618,14 +688,16 @@ namespace subs_check.win.gui
                     }
                 }
                 else if (comboBox5.Text.StartsWith(githubRawPrefix)) config["mihomo-overwrite-url"] = githubProxyURL + comboBox5.Text;
-                else config["mihomo-overwrite-url"] = comboBox5.Text;
+                else config["mihomo-overwrite-url"] = comboBox5.Text != "" ? comboBox5.Text : $"http://127.0.0.1:{numericUpDown6.Value}/ACL4SSR_Online_Full.yaml";
                 
                 config["rename-node"] = checkBox1.Checked;//以节点IP查询位置重命名节点
                 config["media-check"] = checkBox2.Checked;//是否开启流媒体检测
                 config["keep-success-proxies"] = false;
-                config["print-progress"] = true;//是否显示进度
+                config["print-progress"] = false;//是否显示进度
                 config["sub-urls-retry"] = 3;//重试次数(获取订阅失败后重试次数)
                 config["subscheck-version"] = 当前subsCheck版本号;//当前subsCheck版本号
+
+                config["gui-auto"] = checkBox5.Checked;//是否开机自启
 
                 //保存几个成功的节点，为0代表不限制 
                 if (checkBox3.Checked) config["success-limit"] = (int)numericUpDown8.Value;
@@ -643,6 +715,23 @@ namespace subs_check.win.gui
                 if (!Directory.Exists(configDirPath))
                     Directory.CreateDirectory(configDirPath);
 
+                string moreYamlPath = Path.Combine(configDirPath, "more.yaml");
+                if (File.Exists(moreYamlPath))
+                {
+                    // 读取more.yaml的内容
+                    string moreYamlContent = File.ReadAllText(moreYamlPath);
+
+                    // 确保more.yaml内容以换行开始
+                    if (!moreYamlContent.StartsWith("\n") && !moreYamlContent.StartsWith("\r\n"))
+                    {
+                        yamlContent += "\n"; // 添加换行符作为分隔
+                    }
+
+                    // 将more.yaml的内容追加到要写入的config.yaml内容后
+                    yamlContent += moreYamlContent;
+
+                    Log($"已将补充参数配置 more.yaml 内容追加到配置文件");
+                }
                 // 写入YAML文件
                 File.WriteAllText(configFilePath, yamlContent);
             }
@@ -670,8 +759,14 @@ namespace subs_check.win.gui
 
         private async void button1_Click(object sender, EventArgs e)
         {
-            if (button1.Text == "启动") 
+            
+            if (button1.Text == "▶️ 启动") 
             {
+                if (checkBox4.Checked && textBox10.Text == "请输入密钥")
+                {
+                    MessageBox.Show("您已启用WebUI，请设置WebUI API密钥！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
                 run = 1;
                 if (button3.Enabled==false)
                 {
@@ -682,6 +777,7 @@ namespace subs_check.win.gui
 
                 numericUpDown1.Enabled = false;
                 numericUpDown2.Enabled = false;
+                textBox11.Enabled = false;
                 numericUpDown3.Enabled = false;
                 numericUpDown4.Enabled = false;
                 numericUpDown5.Enabled = false;
@@ -693,7 +789,8 @@ namespace subs_check.win.gui
                 groupBox4.Enabled = false;
                 groupBox5.Enabled = false;
                 groupBox6.Enabled = false;
-                button1.Text = "停止";
+                if (checkBox4.Checked) button6.Enabled = true;
+                button1.Text = "⏹️ 停止";
                 timer3.Enabled = true;
                 // 清空 richTextBox1
                 richTextBox1.Clear();
@@ -726,9 +823,11 @@ namespace subs_check.win.gui
                 StopSubsCheckProcess();
                 // 结束 Sub-Store
                 await KillNodeProcessAsync();
+                if (checkBox4.Checked) ReadConfig();
                 button3.Enabled = false;
                 numericUpDown1.Enabled = true;
                 numericUpDown2.Enabled = true;
+                textBox11.Enabled = true;
                 numericUpDown3.Enabled = true;
                 numericUpDown4.Enabled = true;
                 numericUpDown5.Enabled = true;
@@ -740,7 +839,8 @@ namespace subs_check.win.gui
                 groupBox4.Enabled = true;
                 groupBox5.Enabled = true;
                 groupBox6.Enabled = true;
-                button1.Text = "启动";
+                button6.Enabled = false;
+                button1.Text = "▶️ 启动";
                 timer3.Enabled = false;
                 // 更新菜单项的启用状态
                 startMenuItem.Enabled = true;
@@ -807,47 +907,152 @@ namespace subs_check.win.gui
 
                             if (downloadUrl != null)
                             {
+                                string 代理下载链接 = githubProxyURL + downloadUrl;
+                                string 原生下载链接 = 代理下载链接;
+                                // 计算"https://"在下载链接中出现的次数
+                                int httpsCount = 0;
+                                int lastIndex = -1;
+                                int currentIndex = 0;
+
+                                // 查找所有"https://"出现的位置
+                                while ((currentIndex = 代理下载链接.IndexOf("https://", currentIndex)) != -1)
+                                {
+                                    httpsCount++;
+                                    lastIndex = currentIndex;
+                                    currentIndex += 8; // "https://".Length = 8
+                                }
+
+                                // 如果"https://"出现2次或以上，提取最后一个"https://"之后的内容
+                                if (httpsCount >= 2 && lastIndex != -1)
+                                {
+                                    原生下载链接 = 代理下载链接.Substring(lastIndex);
+                                }
+
                                 string executablePath = Path.GetDirectoryName(Application.ExecutablePath);
+
+                                // 创建下载请求 - 优化的多级尝试下载逻辑
+                                Log("开始下载文件...");
+                                bool downloadSuccess = false;
                                 string zipFilePath = Path.Combine(executablePath, "subs-check_Windows_i386.zip");
+                                string failureReason = "";
+
                                 // 如果文件已存在，先删除
                                 if (File.Exists(zipFilePath)) File.Delete(zipFilePath);
 
-                                Log($"开始下载 {downloadUrl}");
-
-                                // 重置进度条
-                                progressBar1.Value = 0;
-
-                                // 获取文件大小
-                                HttpResponseMessage sizeResponse = await client.SendAsync(new HttpRequestMessage(HttpMethod.Head, githubProxyURL + downloadUrl));
-                                long totalBytes = sizeResponse.Content.Headers.ContentLength ?? 0;
-
-                                // 创建下载请求
-                                using (var downloadResponse = await client.GetAsync(githubProxyURL + downloadUrl, HttpCompletionOption.ResponseHeadersRead))
-                                using (var contentStream = await downloadResponse.Content.ReadAsStreamAsync())
-                                using (var fileStream = new FileStream(zipFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
+                                // 第一次尝试：使用代理下载链接 + 当前HttpClient(不使用系统代理)
+                                try
                                 {
-                                    byte[] buffer = new byte[8192];
-                                    long totalBytesRead = 0;
-                                    int bytesRead;
+                                    Log($"[尝试1/4] 使用代理下载链接：{代理下载链接}");
+                                    downloadSuccess = await DownloadFileAsync(client, 代理下载链接, zipFilePath);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log($"[尝试1/4] 失败: {ex.Message}", true);
+                                    failureReason = ex.Message;
+                                }
 
-                                    while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                                // 如果第一次尝试失败，且代理链接与原生链接不同，使用原生下载链接尝试
+                                if (!downloadSuccess && 代理下载链接 != 原生下载链接)
+                                {
+                                    try
                                     {
-                                        await fileStream.WriteAsync(buffer, 0, bytesRead);
+                                        Log($"[尝试2/4] 使用原生下载链接：{原生下载链接}");
+                                        downloadSuccess = await DownloadFileAsync(client, 原生下载链接, zipFilePath);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Log($"[尝试2/4] 失败: {ex.Message}", true);
+                                        failureReason = ex.Message;
+                                    }
+                                }
 
-                                        totalBytesRead += bytesRead;
-
-                                        // 更新进度条
-                                        if (totalBytes > 0)
+                                // 如果前面的尝试都失败，创建使用系统代理的HttpClient再次尝试
+                                if (!downloadSuccess)
+                                {
+                                    try
+                                    {
+                                        Log("[尝试3/4] 使用系统代理 + 代理下载链接");
+                                        using (HttpClient proxyClient = new HttpClient())
                                         {
-                                            int progressPercentage = (int)((totalBytesRead * 100) / totalBytes);
-                                            // 确保进度值在有效范围内 (0-100)
-                                            progressPercentage = Math.Min(100, Math.Max(0, progressPercentage));
-                                            progressBar1.Value = progressPercentage;
+                                            proxyClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win32; x86) AppleWebKit/537.36 (KHTML, like Gecko) cmliu/SubsCheck-Win-GUI");
+                                            proxyClient.Timeout = TimeSpan.FromSeconds(30);
+
+                                            downloadSuccess = await DownloadFileAsync(proxyClient, 代理下载链接, zipFilePath);
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Log($"[尝试3/4] 失败: {ex.Message}", true);
+                                        failureReason = ex.Message;
+                                    }
+
+                                    // 最后一次尝试：使用系统代理 + 原生链接（如果不同）
+                                    if (!downloadSuccess && 代理下载链接 != 原生下载链接)
+                                    {
+                                        try
+                                        {
+                                            Log("[尝试4/4] 使用系统代理 + 原生下载链接");
+                                            using (HttpClient proxyClient = new HttpClient())
+                                            {
+                                                proxyClient.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win32; x86) AppleWebKit/537.36 (KHTML, like Gecko) cmliu/SubsCheck-Win-GUI");
+                                                proxyClient.Timeout = TimeSpan.FromSeconds(30);
+
+                                                downloadSuccess = await DownloadFileAsync(proxyClient, 原生下载链接, zipFilePath);
+                                            }
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            Log($"[尝试4/4] 失败: {ex.Message}", true);
+                                            failureReason = ex.Message;
                                         }
                                     }
                                 }
 
-                                Log("下载完成，正在解压文件...");
+                                if (downloadSuccess)
+                                {
+                                    Log("下载完成，正在解压文件...");
+
+                                    // 解压文件的代码保持不变
+                                    using (System.IO.Compression.ZipArchive archive = System.IO.Compression.ZipFile.OpenRead(zipFilePath))
+                                    {
+                                        // 查找subs-check.exe
+                                        System.IO.Compression.ZipArchiveEntry exeEntry = archive.Entries.FirstOrDefault(
+                                            entry => entry.Name.Equals("subs-check.exe", StringComparison.OrdinalIgnoreCase));
+
+                                        if (exeEntry != null)
+                                        {
+                                            string exeFilePath = Path.Combine(executablePath, "subs-check.exe");
+
+                                            // 如果文件已存在，先删除
+                                            if (File.Exists(exeFilePath))
+                                            {
+                                                File.Delete(exeFilePath);
+                                            }
+
+                                            // 解压文件
+                                            exeEntry.ExtractToFile(exeFilePath);
+                                            当前subsCheck版本号 = latestVersion;
+                                            Log($"subs-check.exe {当前subsCheck版本号} 已就绪！");
+
+                                            await SaveConfig(false);
+
+                                            // 删除下载的zip文件
+                                            //File.Delete(zipFilePath);
+                                        }
+                                        else
+                                        {
+                                            Log("无法在压缩包中找到 subs-check.exe 文件。", true);
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    // 所有尝试都失败
+                                    Log($"所有下载尝试均失败，最后错误: {failureReason}", true);
+                                    MessageBox.Show($"下载 subs-check.exe 失败，请检查网络连接后重试。\n\n可尝试更换 Github Proxy 后，点击「检查更新」>「更新内核」。\n或前往 https://github.com/beck-8/subs-check/releases 自行下载！",
+                                        "下载失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                    progressBar1.Value = 0;
+                                }
 
                                 // 解压文件
                                 using (System.IO.Compression.ZipArchive archive = System.IO.Compression.ZipFile.OpenRead(zipFilePath))
@@ -999,17 +1204,19 @@ namespace subs_check.win.gui
                 subsCheckProcess.Exited += SubsCheckProcess_Exited;
 
                 Log($"subs-check.exe {当前subsCheck版本号} 已启动...");
+                timer4.Enabled = true;
             }
             catch (Exception ex)
             {
                 Log($"启动 subs-check.exe 时出错: {ex.Message}", true);
-                button1.Text = "启动";
+                button1.Text = "▶️ 启动";
             }
         }
 
 
         private void StopSubsCheckProcess()
         {
+            timer4.Enabled = false;
             if (subsCheckProcess != null && !subsCheckProcess.HasExited)
             {
                 try
@@ -1019,6 +1226,8 @@ namespace subs_check.win.gui
                     subsCheckProcess.WaitForExit();
                     Log("subs-check.exe 已停止");
                     notifyIcon1.Icon = originalNotifyIcon;
+                    button7.Enabled = false;
+                    button7.Text = "🔀未启动";
                 }
                 catch (Exception ex)
                 {
@@ -1031,9 +1240,7 @@ namespace subs_check.win.gui
                 }
             }
         }
-
-        private string lastProgressLine = null; // 这个变量已经在类中定义，用于记录最后的进度行
-        private string nextCheckTime = null;// 用于存储下次检查时间
+        
         private void SubsCheckProcess_OutputDataReceived(object sender, DataReceivedEventArgs e)
         {
             if (!string.IsNullOrEmpty(e.Data))
@@ -1060,25 +1267,18 @@ namespace subs_check.win.gui
                         // 提取完整的下次检查时间信息
                         int startIndex = cleanText.IndexOf("下次检查时间:");
                         nextCheckTime = cleanText.Substring(startIndex);
-
-                        // 确保通知图标文本不超过63个字符
-                        string notifyText = "SubsCheck: " + nodeInfo + "\n" + nextCheckTime;
-                        if (notifyText.Length > 63)
-                        {
-                            // 优先保留节点信息
-                            int remainingLength = 63 - ("SubsCheck: ".Length + nodeInfo.Length);
-                            if (remainingLength > 5) // 确保至少有足够空间显示部分下次检查时间
-                            {
-                                notifyText = "SubsCheck: " + nodeInfo + "\n" + nextCheckTime.Substring(0, Math.Min(remainingLength, nextCheckTime.Length));
-                            }
-                            else
-                            {
-                                notifyText = "SubsCheck: " + nodeInfo;
-                            }
-                        }
-                        notifyIcon1.Text = notifyText;
                     }
 
+                    if (!cleanText.StartsWith("[GIN]"))
+                    {
+                        // 如果不是进度行，则添加到日志中
+                        richTextBox1.AppendText(cleanText + "\r\n");
+                        // 滚动到最底部
+                        richTextBox1.SelectionStart = richTextBox1.Text.Length;
+                        richTextBox1.ScrollToCaret();
+                    }
+
+                    /*
                     // 检查是否是进度信息行
                     if (cleanText.StartsWith("进度: ["))
                     {
@@ -1137,6 +1337,7 @@ namespace subs_check.win.gui
                         richTextBox1.SelectionStart = richTextBox1.Text.Length;
                         richTextBox1.ScrollToCaret();
                     }
+                    */
                 }));
             }
         }
@@ -1156,7 +1357,7 @@ namespace subs_check.win.gui
             BeginInvoke(new Action(() =>
             {
                 Log("subs-check.exe 已退出");
-                button1.Text = "启动";
+                button1.Text = "▶️ 启动";
 
                 // 更新菜单项的启用状态
                 startMenuItem.Enabled = true;
@@ -1237,8 +1438,8 @@ namespace subs_check.win.gui
                     // 添加说明标签
                     Label label = new Label();
                     label.Text = "发现多个局域网IP地址：\n\n" +
-                                 "· 仅在本机订阅：直接点击【取消】，将使用127.0.0.1\n\n" +
-                                 "· 局域网内其他设备订阅：请在下面列表中选择一个正确的局域网IP";
+                                 "· 仅在本机访问：直接点击【取消】，将使用127.0.0.1\n\n" +
+                                 "· 局域网内其他设备访问：请在下面列表中选择一个正确的局域网IP";
                     label.Location = new Point(15, 10);
                     label.AutoSize = true;
                     label.MaximumSize = new Size(380, 0); // 设置最大宽度，允许自动换行
@@ -1256,12 +1457,24 @@ namespace subs_check.win.gui
                     {
                         listBox.Items.Add(ip);
                     }
-                    listBox.SelectedIndex = 0; // 默认选择第一个IP
+                    // 查找非".1"结尾的IP地址，如果所有IP都以".1"结尾，则使用第一个IP
+                    int selectedIndex = 0;
+                    for (int i = 0; i < lanIPs.Count; i++)
+                    {
+                        if (!lanIPs[i].EndsWith(".1"))
+                        {
+                            selectedIndex = i;
+                            break;
+                        }
+                    }
+
+                    // 设置选中的索引
+                    listBox.SelectedIndex = selectedIndex;
                     selectForm.Controls.Add(listBox);
 
                     // 添加警告标签（放在列表框下方）
                     Label warningLabel = new Label();
-                    warningLabel.Text = "注意：选择错误的IP会导致局域网内其他设备无法正常订阅";
+                    warningLabel.Text = "注意：选择错误的IP会导致局域网内其他设备无法访问。\n\n　　　推荐您可以先尝试使用非“.1”结尾的IP！";
                     warningLabel.Location = new Point(15, labelHeight + listBox.Height + 10);
                     warningLabel.AutoSize = true;
                     warningLabel.ForeColor = Color.Red; // 警告文本使用红色
@@ -1421,6 +1634,32 @@ namespace subs_check.win.gui
             textBox8.PasswordChar = '*';
         }
 
+        private void textBox10_Enter(object sender, EventArgs e)
+        {
+            textBox10.PasswordChar = '\0';
+            if (textBox10.Text == "请输入密钥")
+            {
+                textBox10.Text = "";
+                textBox10.ForeColor = Color.Black;
+            }
+        }
+
+        private void textBox10_Leave(object sender, EventArgs e)
+        {
+            
+            if (textBox10.Text == "")
+            {
+                textBox10.PasswordChar = '\0';
+                textBox10.Text = "请输入密钥";
+                textBox10.ForeColor = Color.Gray;
+            }
+            else
+            {
+                textBox10.ForeColor = Color.Black;
+                textBox10.PasswordChar = '*';
+            }
+        }
+
         private void textBox7_Leave(object sender, EventArgs e)
         {
             // 检查是否有内容
@@ -1463,18 +1702,36 @@ namespace subs_check.win.gui
             string logType = isError ? "ERR" : "INF";
             richTextBox1.AppendText($"{timestamp} {logType} {message}\r\n");
 
-            // 滚动到最底部
-            richTextBox1.SelectionStart = richTextBox1.Text.Length;
-            richTextBox1.ScrollToCaret();
+            if (richTextBox1.IsHandleCreated)
+            {
+                richTextBox1.BeginInvoke((MethodInvoker)(() =>
+                {
+                    // 滚动到最底部
+                    richTextBox1.SelectionStart = richTextBox1.Text.Length;
+                    richTextBox1.ScrollToCaret();
+                }));
+            }
         }
 
         private void 恢复窗口()
         {
-            // 显示窗体
+            // 首先显示窗体
             this.Show();
+
+            // 强制停止当前布局逻辑
+            this.SuspendLayout();
 
             // 恢复窗口状态
             this.WindowState = FormWindowState.Normal;
+
+            // 强制重新布局
+            this.ResumeLayout(true); // 参数true表示立即执行布局
+
+            // 调用刷新布局的方法
+            this.PerformLayout();
+
+            // 处理WindowsForms消息队列中的所有挂起消息
+            Application.DoEvents();
 
             // 激活窗口（使其获得焦点）
             this.Activate();
@@ -1834,7 +2091,7 @@ namespace subs_check.win.gui
 
         private async void timer3_Tick(object sender, EventArgs e)
         {
-            if (button1.Text == "停止") 
+            if (button1.Text == "⏹️ 停止") 
             {
                 Log("subs-check.exe 运行时满24小时，自动重启清理内存占用。");
                 // 停止 subs-check.exe 程序
@@ -1856,7 +2113,7 @@ namespace subs_check.win.gui
                 groupBox4.Enabled = false;
                 groupBox5.Enabled = false;
                 groupBox6.Enabled = false;
-                button1.Text = "停止";
+                button1.Text = "⏹️ 停止";
             }
         }
 
@@ -1898,123 +2155,120 @@ namespace subs_check.win.gui
 
         private async void comboBox5_SelectedIndexChanged(object sender, EventArgs e)
         {
-            await ProcessComboBox5Selection(true);
+            if (comboBox5.Text.Contains("[内置]")) await ProcessComboBox5Selection(true);
         }
 
         private async Task ProcessComboBox5Selection(bool 汇报Log = false)
         {
-            if (comboBox5.Text.Contains("[内置]"))
+            // 确定文件名和下载URL
+            string fileName;
+            string downloadFilePath;
+            string downloadUrl;
+            string displayName;
+            string executablePath = Path.GetDirectoryName(System.Windows.Forms.Application.ExecutablePath);
+            if (comboBox5.Text.Contains("[内置]布丁狗"))
             {
-                // 确定文件名和下载URL
-                string fileName;
-                string downloadFilePath;
-                string downloadUrl;
-                string displayName;
-                string executablePath = Path.GetDirectoryName(System.Windows.Forms.Application.ExecutablePath);
-                if (comboBox5.Text.Contains("[内置]布丁狗"))
+                fileName = "bdg.yaml";
+                displayName = "[内置]布丁狗的订阅转换";
+                downloadUrl = "https://raw.githubusercontent.com/cmliu/ACL4SSR/main/yaml/bdg.yaml";
+            }
+            else // [内置]ACL4SSR
+            {
+                fileName = "ACL4SSR_Online_Full.yaml";
+                displayName = "[内置]ACL4SSR_Online_Full";
+                downloadUrl = "https://raw.githubusercontent.com/beck-8/override-hub/main/yaml/ACL4SSR_Online_Full.yaml";
+            }
+
+            // 确保output文件夹存在
+            string outputFolderPath = Path.Combine(executablePath, "output");
+            if (!Directory.Exists(outputFolderPath))
+            {
+                Directory.CreateDirectory(outputFolderPath);
+            }
+
+            // 确定文件完整路径
+            downloadFilePath = Path.Combine(outputFolderPath, fileName);
+
+            // 检查文件是否存在
+            if (!File.Exists(downloadFilePath))
+            {
+                Log($"{displayName} 覆写配置文件 未找到，正在下载...");
+
+                // 重置进度条
+                progressBar1.Value = 0;
+
+                // 添加GitHub代理前缀如果有
+                string fullDownloadUrl = githubProxyURL + downloadUrl;
+
+                try
                 {
-                    fileName = "bdg.yaml";
-                    displayName = "[内置]布丁狗的订阅转换";
-                    downloadUrl = "https://raw.githubusercontent.com/cmliu/ACL4SSR/main/yaml/bdg.yaml";
-                }
-                else // [内置]ACL4SSR
-                {
-                    fileName = "ACL4SSR_Online_Full.yaml";
-                    displayName = "[内置]ACL4SSR_Online_Full";
-                    downloadUrl = "https://raw.githubusercontent.com/beck-8/override-hub/main/yaml/ACL4SSR_Online_Full.yaml";
-                }
-
-                // 确保output文件夹存在
-                string outputFolderPath = Path.Combine(executablePath, "output");
-                if (!Directory.Exists(outputFolderPath))
-                {
-                    Directory.CreateDirectory(outputFolderPath);
-                }
-
-                // 确定文件完整路径
-                downloadFilePath = Path.Combine(outputFolderPath, fileName);
-
-                // 检查文件是否存在
-                if (!File.Exists(downloadFilePath))
-                {
-                    Log($"{displayName} 覆写配置文件 未找到，正在下载...");
-
-                    // 重置进度条
-                    progressBar1.Value = 0;
-
-                    // 添加GitHub代理前缀如果有
-                    string fullDownloadUrl = githubProxyURL + downloadUrl;
-
-                    try
+                    // 创建不使用系统代理的HttpClientHandler
+                    using (HttpClientHandler handler = new HttpClientHandler { UseProxy = false, Proxy = null })
+                    using (HttpClient client = new HttpClient(handler))
                     {
-                        // 创建不使用系统代理的HttpClientHandler
-                        using (HttpClientHandler handler = new HttpClientHandler { UseProxy = false, Proxy = null })
-                        using (HttpClient client = new HttpClient(handler))
+                        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win32; x86) AppleWebKit/537.36 (KHTML, like Gecko) cmliu/SubsCheck-Win-GUI");
+                        client.Timeout = TimeSpan.FromSeconds(15); // 设置15秒超时
+
+                        // 先获取文件大小
+                        HttpResponseMessage headResponse = await client.SendAsync(new HttpRequestMessage(HttpMethod.Head, fullDownloadUrl));
+                        long totalBytes = headResponse.Content.Headers.ContentLength ?? 0;
+
+                        // 如果无法获取文件大小，显示不确定进度
+                        if (totalBytes == 0)
                         {
-                            client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win32; x86) AppleWebKit/537.36 (KHTML, like Gecko) cmliu/SubsCheck-Win-GUI");
-                            client.Timeout = TimeSpan.FromSeconds(15); // 设置15秒超时
+                            //Log($"无法获取 {displayName} 文件大小，将显示不确定进度");
+                        }
 
-                            // 先获取文件大小
-                            HttpResponseMessage headResponse = await client.SendAsync(new HttpRequestMessage(HttpMethod.Head, fullDownloadUrl));
-                            long totalBytes = headResponse.Content.Headers.ContentLength ?? 0;
-
-                            // 如果无法获取文件大小，显示不确定进度
-                            if (totalBytes == 0)
+                        // 创建下载请求并获取响应流
+                        using (var response = await client.GetAsync(fullDownloadUrl, HttpCompletionOption.ResponseHeadersRead))
+                        {
+                            if (response.IsSuccessStatusCode)
                             {
-                                //Log($"无法获取 {displayName} 文件大小，将显示不确定进度");
-                            }
-
-                            // 创建下载请求并获取响应流
-                            using (var response = await client.GetAsync(fullDownloadUrl, HttpCompletionOption.ResponseHeadersRead))
-                            {
-                                if (response.IsSuccessStatusCode)
+                                using (var contentStream = await response.Content.ReadAsStreamAsync())
+                                using (var fileStream = new FileStream(downloadFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
                                 {
-                                    using (var contentStream = await response.Content.ReadAsStreamAsync())
-                                    using (var fileStream = new FileStream(downloadFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
+                                    byte[] buffer = new byte[8192];
+                                    long totalBytesRead = 0;
+                                    int bytesRead;
+
+                                    while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                                     {
-                                        byte[] buffer = new byte[8192];
-                                        long totalBytesRead = 0;
-                                        int bytesRead;
+                                        await fileStream.WriteAsync(buffer, 0, bytesRead);
+                                        totalBytesRead += bytesRead;
 
-                                        while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                                        // 更新进度条
+                                        if (totalBytes > 0)
                                         {
-                                            await fileStream.WriteAsync(buffer, 0, bytesRead);
-                                            totalBytesRead += bytesRead;
-
-                                            // 更新进度条
-                                            if (totalBytes > 0)
-                                            {
-                                                int progressPercentage = (int)((totalBytesRead * 100) / totalBytes);
-                                                // 确保进度值在有效范围内 (0-100)
-                                                progressPercentage = Math.Min(100, Math.Max(0, progressPercentage));
-                                                progressBar1.Value = progressPercentage;
-                                            }
+                                            int progressPercentage = (int)((totalBytesRead * 100) / totalBytes);
+                                            // 确保进度值在有效范围内 (0-100)
+                                            progressPercentage = Math.Min(100, Math.Max(0, progressPercentage));
+                                            progressBar1.Value = progressPercentage;
                                         }
-
-                                        // 确保进度条显示100%
-                                        progressBar1.Value = 100;
                                     }
 
-                                    Log($"{displayName} 覆写配置文件 下载成功");
+                                    // 确保进度条显示100%
+                                    progressBar1.Value = 100;
                                 }
-                                else
-                                {
-                                    Log($"{displayName} 覆写配置文件 下载失败: HTTP {(int)response.StatusCode} {response.ReasonPhrase}", true);
-                                }
+
+                                Log($"{displayName} 覆写配置文件 下载成功");
+                            }
+                            else
+                            {
+                                Log($"{displayName} 覆写配置文件 下载失败: HTTP {(int)response.StatusCode} {response.ReasonPhrase}", true);
                             }
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        Log($"{displayName} 覆写配置文件 下载失败: {ex.Message}", true);
-                        // 出错时重置进度条
-                        progressBar1.Value = 0;
-                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    if (汇报Log) Log($"{displayName} 覆写配置文件 已就绪。");
+                    Log($"{displayName} 覆写配置文件 下载失败: {ex.Message}", true);
+                    // 出错时重置进度条
+                    progressBar1.Value = 0;
                 }
+            }
+            else
+            {
+                if (汇报Log) Log($"{displayName} 覆写配置文件 已就绪。");
             }
         }
 
@@ -2034,6 +2288,769 @@ namespace subs_check.win.gui
                     "• 宽带峰值/10Mbps：可能会影响同网络下其他设备的上网体验";
 
                 MessageBox.Show(warningMessage, "网络安全警告", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void checkBox4_CheckedChanged(object sender, EventArgs e)
+        {
+            if(checkBox4.Checked) textBox10.Enabled = true;
+            else textBox10.Enabled = false;
+        }
+
+        private void button6_Click(object sender, EventArgs e)
+        {
+            string 本地IP = GetLocalLANIP();
+            try
+            {
+                // 构造URL
+                string url = $"http://{本地IP}:{numericUpDown6.Value}/admin";
+
+                // 使用系统默认浏览器打开URL
+                System.Diagnostics.Process.Start(url);
+
+                Log($"正在浏览器中打开 Sub-Store 管理页面: {url}");
+            }
+            catch (Exception ex)
+            {
+                Log($"打开浏览器失败: {ex.Message}", true);
+                MessageBox.Show($"打开浏览器时出错: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 获取API状态信息并返回包含6个元素的字符串数组
+        /// </summary>
+        /// <returns>
+        /// 包含6个元素的字符串数组：
+        /// [0] - 状态类型 ("checking"/"idle"/"error")
+        /// [1] - 状态图标类别 ("primary"/"success"/"danger")
+        /// [2] - 状态文本 ("正在检测中..."/"空闲"/"获取状态失败")
+        /// [3] - 节点总数 (proxyCount或"N/A")
+        /// [4] - 进度百分比 (progress或"N/A")
+        /// [5] - 可用节点数量 (available或"N/A")
+        /// </returns>
+        private async Task<string[]> GetApiStatusAsync()
+        {
+            string[] resultArray = new string[6];
+            string baseUrl = $"http://127.0.0.1:{numericUpDown6.Value}";
+
+            try
+            {
+                using (HttpClient client = new HttpClient())
+                {
+                    // 设置基础URL
+                    client.BaseAddress = new Uri(baseUrl);
+
+                    // 添加API密钥请求头
+                    client.DefaultRequestHeaders.Add("X-API-Key", WebUIapiKey);
+
+                    // 设置超时时间
+                    client.Timeout = TimeSpan.FromSeconds(5);
+
+                    // 发送请求
+                    HttpResponseMessage response = await client.GetAsync("/api/status");
+
+                    // 检查响应状态
+                    if (response.IsSuccessStatusCode)
+                    {
+                        // 读取响应内容
+                        string content = await response.Content.ReadAsStringAsync();
+
+                        // 解析JSON
+                        JObject data = JObject.Parse(content);
+
+                        if (data["checking"] != null && data["checking"].Value<bool>())
+                        {
+                            // 正在检测状态
+                            resultArray[0] = "checking";
+                            resultArray[1] = "primary";
+                            resultArray[2] = "正在检测中...";
+
+                            // 提取节点数据
+                            resultArray[3] = data["proxyCount"]?.ToString() ?? "0";
+                            resultArray[4] = data["progress"]?.ToString() ?? "0";
+                            resultArray[5] = data["available"]?.ToString() ?? "0";
+                        }
+                        else
+                        {
+                            // 空闲状态
+                            resultArray[0] = "idle";
+                            resultArray[1] = "success";
+                            resultArray[2] = "空闲";
+
+                            // 空闲时相关数据设为N/A
+                            resultArray[3] = "N/A";
+                            resultArray[4] = "N/A";
+                            resultArray[5] = "N/A";
+                        }
+                    }
+                    else
+                    {
+                        // 请求失败，例如未授权
+                        resultArray[0] = "error";
+                        resultArray[1] = "danger";
+                        resultArray[2] = $"API请求失败: {(int)response.StatusCode}";
+                        resultArray[3] = "N/A";
+                        resultArray[4] = "N/A";
+                        resultArray[5] = "N/A";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // 发生异常
+                resultArray[0] = "error";
+                resultArray[1] = "danger";
+                resultArray[2] = $"获取状态失败: {ex.Message}";
+                resultArray[3] = "N/A";
+                resultArray[4] = "N/A";
+                resultArray[5] = "N/A";
+
+                // 可选：记录错误到日志
+                Log($"获取API状态失败: {ex.Message}", true);
+            }
+
+            return resultArray;
+        }
+
+        private async void timer4_Tick(object sender, EventArgs e)
+        {
+            //if (!button7.Enabled) button7.Enabled = true;
+            string[] subscheck状态 = await GetApiStatusAsync();
+            string 状态类型 = subscheck状态[0];
+            string 状态图标类别 = subscheck状态[1];
+            string 状态文本 = subscheck状态[2];
+            string 节点总数 = subscheck状态[3];
+            string 进度百分比 = subscheck状态[4];
+            string 可用节点数量 = subscheck状态[5];
+            // 更新状态文本
+
+            if (状态类型 == "checking")
+            {
+                button7.Text = "⏸️ 暂停";
+                nodeInfo = $"({进度百分比}/{节点总数}) 可用: {可用节点数量}";
+                int nodeTotal = int.Parse(节点总数);
+                if (nodeTotal > 0) {
+                    int 进度条百分比 = int.Parse(进度百分比) * 100 / nodeTotal;
+                    progressBar1.Value = 进度条百分比;
+                    if (!button7.Enabled) button7.Enabled = true;
+                }
+                
+                // 确保通知图标文本不超过63个字符
+                string notifyText = "SubsCheck: " + nodeInfo;
+                if (notifyText.Length > 63)
+                {
+                    notifyText = notifyText.Substring(0, 60) + "...";
+                }
+                notifyIcon1.Text = notifyText;
+                textBox1.Enabled = false;
+            }
+            else if (状态类型 == "idle")
+            {
+                button7.Text = "⏯️ 开始";
+                progressBar1.Value = 100;
+                nodeInfo = $"等待{nextCheckTime}";
+                notifyIcon1.Text = "SubsCheck: 已就绪\n" + nextCheckTime; ;
+                textBox1.Enabled = true;
+            }
+            else if (状态类型 == "error")
+            {
+                button7.Text = "🔀 未知";
+                nodeInfo = 状态文本;
+            }
+            groupBox2.Text = $"实时日志 {nodeInfo}";
+        }
+
+        private async void button7_Click(object sender, EventArgs e)
+        {
+            button7.Enabled = false;
+            timer4.Enabled = false;
+
+            try
+            {
+                bool isSuccess;
+
+                if (button7.Text == "⏯️ 开始")
+                {
+                    isSuccess = await SendApiRequestAsync("/api/trigger-check", "节点检查");
+                    if (isSuccess)
+                    {
+                        button7.Text = "⏸️ 暂停";
+                        textBox1.Enabled = false; // 检查开始后禁用订阅编辑
+                    }
+                }
+                else // "⏸️ 暂停"
+                {
+                    isSuccess = await SendApiRequestAsync("/api/force-close", "强制关闭");
+                }
+
+                // 如果请求失败，更新按钮状态为未知
+                if (!isSuccess) button7.Text = "🔀 未知";
+            }
+            finally
+            {
+                // 无论成功失败都重新启用定时器和按钮
+                timer4.Enabled = true;
+                timer4.Start();
+                //button7.Enabled = true;
+            }
+        }
+
+        /// <summary>
+        /// 发送API请求到SubsCheck服务
+        /// </summary>
+        /// <param name="endpoint">API端点路径</param>
+        /// <param name="operationName">操作名称(用于日志)</param>
+        /// <returns>操作是否成功</returns>
+        private async Task<bool> SendApiRequestAsync(string endpoint, string operationName)
+        {
+            try
+            {
+                // 获取API基础地址和API密钥
+                string baseUrl = $"http://127.0.0.1:{numericUpDown6.Value}";
+
+                using (HttpClient client = new HttpClient())
+                {
+                    client.BaseAddress = new Uri(baseUrl);
+                    client.DefaultRequestHeaders.Add("X-API-Key", WebUIapiKey);
+                    client.Timeout = TimeSpan.FromSeconds(10);
+
+                    // 发送POST请求
+                    HttpResponseMessage response = await client.PostAsync(endpoint, new StringContent(""));
+
+                    // 检查响应状态
+                    if (response.IsSuccessStatusCode)
+                    {
+                        Log($"成功{operationName}");
+                        return true;
+                    }
+                    else
+                    {
+                        string errorContent = await response.Content.ReadAsStringAsync();
+                        Log($"{operationName}失败: HTTP {(int)response.StatusCode} {response.ReasonPhrase}\n{errorContent}", true);
+                        return false;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"{operationName}时发生错误: {ex.Message}", true);
+                return false;
+            }
+        }
+
+        private void textBox11_Leave(object sender, EventArgs e)
+        {
+            if (IsValidCronExpression(textBox11.Text))
+            {
+                // 计算并显示cron表达式的说明
+                string cronDescription = GetCronExpressionDescription(textBox11.Text);
+                // 可以用工具提示或者消息框显示，这里使用消息框
+                //MessageBox.Show(cronDescription, "Cron表达式说明", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Log($"Cron表达式说明 {cronDescription}");
+            }
+            else
+            {
+                MessageBox.Show("请输入有效的cron表达式，例如：*/30 * * * *", "无效的cron表达式",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                textBox11.Focus();
+                textBox11.Text = "0 */2 * * *"; // 恢复默认值
+            }
+        }
+
+        /// <summary>
+        /// 验证输入文本是否是合法的cron表达式
+        /// </summary>
+        /// <returns>如果是合法的cron表达式，则返回true；否则返回false</returns>
+        private bool IsValidCronExpression(string cron表达式)
+        {
+            string cronExpression = cron表达式.Trim();
+
+            // 如果是空字符串，则不是有效表达式
+            if (string.IsNullOrWhiteSpace(cronExpression))
+                return false;
+
+            // 分割cron表达式为5个部分：分钟 小时 日期 月份 星期
+            string[] parts = cronExpression.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+            // cron表达式必须有5个部分
+            if (parts.Length != 5)
+                return false;
+
+            try
+            {
+                // 验证每个部分
+                // 分钟 (0-59)
+                if (!IsValidCronField(parts[0], 0, 59))
+                    return false;
+
+                // 小时 (0-23)
+                if (!IsValidCronField(parts[1], 0, 23))
+                    return false;
+
+                // 日期 (1-31)
+                if (!IsValidCronField(parts[2], 1, 31))
+                    return false;
+
+                // 月份 (1-12)
+                if (!IsValidCronField(parts[3], 1, 12))
+                    return false;
+
+                // 星期 (0-7，0和7都表示星期日)
+                if (!IsValidCronField(parts[4], 0, 7))
+                    return false;
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 验证cron表达式中的单个字段是否合法
+        /// </summary>
+        /// <param name="field">字段值</param>
+        /// <param name="min">最小允许值</param>
+        /// <param name="max">最大允许值</param>
+        /// <returns>如果字段合法，则返回true；否则返回false</returns>
+        private bool IsValidCronField(string field, int min, int max)
+        {
+            // 处理通配符 "*"
+            if (field == "*")
+                return true;
+
+            // 处理步长 "*/n"
+            if (field.StartsWith("*/"))
+            {
+                string stepStr = field.Substring(2);
+                if (int.TryParse(stepStr, out int step))
+                    return step > 0 && step <= max;
+                return false;
+            }
+
+            // 处理范围 "n-m"
+            if (field.Contains("-"))
+            {
+                string[] range = field.Split('-');
+                if (range.Length != 2)
+                    return false;
+
+                if (int.TryParse(range[0], out int start) && int.TryParse(range[1], out int end))
+                    return start >= min && end <= max && start <= end;
+                return false;
+            }
+
+            // 处理列表 "n,m,k"
+            if (field.Contains(","))
+            {
+                string[] values = field.Split(',');
+                foreach (string item in values)
+                {
+                    if (!int.TryParse(item, out int itemValue) || itemValue < min || itemValue > max)
+                        return false;
+                }
+                return true;
+            }
+
+            // 处理单个数字
+            if (int.TryParse(field, out int fieldValue))
+                return fieldValue >= min && fieldValue <= max;
+
+            return false;
+        }
+
+        /// <summary>
+        /// 获取cron表达式的友好文本说明
+        /// </summary>
+        /// <param name="cron表达式">要解析的cron表达式</param>
+        /// <returns>返回cron表达式的执行时间说明</returns>
+        private string GetCronExpressionDescription(string cron表达式)
+        {
+            try
+            {
+                string cronExpression = cron表达式.Trim();
+                string[] parts = cronExpression.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+                if (parts.Length != 5)
+                    return "无效的cron表达式";
+
+                // 分别解析每个部分
+                string minuteDesc = ParseCronPart(parts[0], "分钟", 0, 59);
+                string hourDesc = ParseCronPart(parts[1], "小时", 0, 23);
+                string dayDesc = ParseCronPart(parts[2], "日", 1, 31);
+                string monthDesc = ParseCronPart(parts[3], "月", 1, 12);
+                string weekDesc = ParseCronPart(parts[4], "星期", 0, 7, true);
+
+                // 组合最终说明
+                string description = "执行时间: ";
+
+                // 月份
+                if (monthDesc != "每月")
+                    description += monthDesc + "的";
+
+                // 星期与日期的关系
+                if (parts[2] == "*" && parts[4] != "*")
+                    description += weekDesc + "的";
+                else if (parts[2] != "*" && parts[4] == "*")
+                    description += dayDesc;
+                else if (parts[2] != "*" && parts[4] != "*")
+                    description += $"{dayDesc}或{weekDesc}";
+                else
+                    description += "每天";
+
+                // 时间（小时:分钟）
+                description += $"{hourDesc}{minuteDesc}";
+
+                return description;
+            }
+            catch
+            {
+                return "无法解析cron表达式";
+            }
+        }
+
+        /// <summary>
+        /// 解析cron表达式的单个部分
+        /// </summary>
+        private string ParseCronPart(string part, string unit, int min, int max, bool isWeekday = false)
+        {
+            // 处理星号，表示每个时间单位
+            if (part == "*")
+            {
+                return $"每{unit}";
+            }
+
+            // 处理步长 */n
+            if (part.StartsWith("*/"))
+            {
+                int step = int.Parse(part.Substring(2));
+                return $"每{step}{unit}";
+            }
+
+            // 处理范围 n-m
+            if (part.Contains("-"))
+            {
+                string[] range = part.Split('-');
+                int start = int.Parse(range[0]);
+                int end = int.Parse(range[1]);
+
+                if (isWeekday)
+                {
+                    string[] weekdays = { "星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日" };
+                    return $"从{weekdays[start]}到{weekdays[end]}";
+                }
+
+                return $"从{start}{unit}到{end}{unit}";
+            }
+
+            // 处理列表 n,m,k
+            if (part.Contains(","))
+            {
+                string[] values = part.Split(',');
+                if (isWeekday)
+                {
+                    string[] weekdays = { "星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日" };
+                    return string.Join("、", values.Select(v => weekdays[int.Parse(v)]));
+                }
+                return $"{string.Join("、", values)}{unit}";
+            }
+
+            // 处理单个数字
+            int value = int.Parse(part);
+            if (isWeekday)
+            {
+                string[] weekdays = { "星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日" };
+                return weekdays[value];
+            }
+            return $"{value}{unit}";
+        }
+
+        private void 切换cron表达式(object sender, EventArgs e)
+        {
+            if (textBox11.Visible)
+            {
+                textBox11.Visible = false;
+                label2.Visible = true;
+                numericUpDown2.Visible = true;
+                Log("下次检查时间间隔 使用分钟倒计时");
+            }
+            else
+            {
+                textBox11.Location = new Point(9, 48);
+                textBox11.Visible = true;
+                label2.Visible = false;
+                numericUpDown2.Visible = false;
+                Log("下次检查时间间隔 使用cron表达式");
+            }
+        }
+
+        /// <summary>
+        /// 获取计算机名的MD5哈希值
+        /// </summary>
+        /// <returns>返回计算机名的MD5哈希字符串(32位小写)</returns>
+        private string GetComputerNameMD5()
+        {
+            try
+            {
+                // 获取计算机名
+                string computerName = System.Environment.MachineName;
+
+                // 引入必要的命名空间
+                using (System.Security.Cryptography.MD5 md5 = System.Security.Cryptography.MD5.Create())
+                {
+                    // 将计算机名转换为字节数组
+                    byte[] inputBytes = System.Text.Encoding.UTF8.GetBytes(computerName);
+
+                    // 计算MD5哈希值
+                    byte[] hashBytes = md5.ComputeHash(inputBytes);
+
+                    // 将字节数组转换为十六进制字符串
+                    StringBuilder sb = new StringBuilder();
+                    for (int i = 0; i < hashBytes.Length; i++)
+                    {
+                        sb.Append(hashBytes[i].ToString("x2"));
+                    }
+
+                    return sb.ToString();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"计算计算机名MD5时出错: {ex.Message}", true);
+                return "CMLiussss";
+            }
+        }
+
+        // 添加辅助下载方法
+        async Task<bool> DownloadFileAsync(HttpClient httpClient, string url, string filePath)
+        {
+            try
+            {
+                // 获取文件大小
+                HttpResponseMessage headResponse = await httpClient.SendAsync(new HttpRequestMessage(HttpMethod.Head, url));
+                headResponse.EnsureSuccessStatusCode(); // 确保请求成功
+                long totalBytes = headResponse.Content.Headers.ContentLength ?? 0;
+
+                // 下载文件
+                using (var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
+                {
+                    response.EnsureSuccessStatusCode(); // 确保请求成功
+
+                    using (var contentStream = await response.Content.ReadAsStreamAsync())
+                    using (var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
+                    {
+                        byte[] buffer = new byte[8192];
+                        long totalBytesRead = 0;
+                        int bytesRead;
+
+                        while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                        {
+                            await fileStream.WriteAsync(buffer, 0, bytesRead);
+                            totalBytesRead += bytesRead;
+
+                            // 更新进度条
+                            if (totalBytes > 0)
+                            {
+                                int progressPercentage = (int)((totalBytesRead * 100) / totalBytes);
+                                progressPercentage = Math.Min(100, Math.Max(0, progressPercentage));
+                                progressBar1.Value = progressPercentage;
+                            }
+                        }
+                    }
+                }
+
+                return true; // 下载成功
+            }
+            catch
+            {
+                throw; // 重新抛出异常，让调用者处理
+            }
+        }
+
+        private static about aboutWindow = null;
+        private void linkLabel1_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            // 检查窗口是否已经打开
+            if (aboutWindow != null && !aboutWindow.IsDisposed)
+            {
+                // 窗口已经存在，激活它
+                aboutWindow.Activate();
+                return;
+            }
+
+            // 需要创建新窗口
+            this.BeginInvoke(new Action(() =>
+            {
+                // 创建about窗口实例
+                aboutWindow = new about();
+
+                // 传递版本号信息
+                aboutWindow.GuiVersion = 当前GUI版本号;
+                aboutWindow.CoreVersion = 当前subsCheck版本号;
+
+                // 添加窗口关闭时的处理，清除静态引用
+                aboutWindow.FormClosed += (s, args) => aboutWindow = null;
+
+                // 非模态显示窗口
+                aboutWindow.Show(this);
+
+                // 设置TopMost确保窗口显示在最前面
+                aboutWindow.TopMost = true;
+            }));
+        }
+
+        private void button8_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                // 创建MoreYAML窗口实例
+                MoreYAML moreYamlWindow = new MoreYAML();
+
+                // 显示为模态对话框，这会阻塞主线程直到窗口关闭
+                DialogResult result = moreYamlWindow.ShowDialog(this);
+
+                // 如果需要，可以处理对话框的返回结果
+                if (result == DialogResult.OK)
+                {
+                    // 用户点击了"确定"或某种完成操作的按钮
+                    Log("补充参数配置已成功保存到 more.yaml 文件！设置已应用");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"打开MoreYAML窗口时出错: {ex.Message}", true);
+                MessageBox.Show($"打开MoreYAML窗口时出错: {ex.Message}", "错误",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private async void checkBox5_CheckedChanged(object sender, EventArgs e)
+        {
+            checkBox5.Enabled = false;
+            try
+            {
+                // 获取当前应用程序的可执行文件路径
+                string appPath = Application.ExecutablePath;
+                // 获取应用程序名称（不包含扩展名）
+                string appName = Path.GetFileNameWithoutExtension(appPath);
+                // 获取启动文件夹的路径
+                string startupFolderPath = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+                // 快捷方式文件的完整路径
+                string shortcutPath = Path.Combine(startupFolderPath, $"{appName}.lnk");
+
+                if (checkBox5.Checked)
+                {
+                    // 检查启动文件夹中是否已存在该快捷方式
+                    if (File.Exists(shortcutPath))
+                    {
+                        Log("开机启动项已存在，无需重复创建");
+                    }
+                    else
+                    {
+                        // 创建快捷方式
+                        CreateShortcut(appPath, shortcutPath, "-auto");
+                        Log("已成功创建开机启动项，下次电脑启动时将自动运行程序");
+                    }
+                }
+                else
+                {
+                    // 删除启动项
+                    if (File.Exists(shortcutPath))
+                    {
+                        File.Delete(shortcutPath);
+                        Log("已移除开机启动项，下次开机将不会自动启动");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"设置开机启动项时出错: {ex.Message}", true);
+                MessageBox.Show($"设置开机启动项失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+                // 恢复CheckBox状态，避免UI状态与实际状态不一致
+                checkBox5.CheckedChanged -= checkBox5_CheckedChanged;
+                checkBox5.Checked = !checkBox5.Checked;
+                checkBox5.CheckedChanged += checkBox5_CheckedChanged;
+            }
+            checkBox5.Enabled = true;
+            await SaveConfig(false);
+        }
+
+        /// <summary>
+        /// 创建指向指定路径应用程序的快捷方式
+        /// </summary>
+        /// <param name="targetPath">目标应用程序的完整路径</param>
+        /// <param name="shortcutPath">要创建的快捷方式的完整路径</param>
+        /// <param name="arguments">可选的启动参数</param>
+        private void CreateShortcut(string targetPath, string shortcutPath, string arguments = "")
+        {
+            // 使用COM接口创建快捷方式
+            Type t = Type.GetTypeFromProgID("WScript.Shell");
+            dynamic shell = Activator.CreateInstance(t);
+            var shortcut = shell.CreateShortcut(shortcutPath);
+
+            shortcut.TargetPath = targetPath;
+            if (!string.IsNullOrEmpty(arguments))
+                shortcut.Arguments = arguments; // 设置启动参数
+
+            shortcut.WorkingDirectory = Path.GetDirectoryName(targetPath);
+            shortcut.WindowStyle = 7; // 最小化启动: 7, 正常启动: 1, 最大化启动: 3
+            shortcut.Description = "SubsCheck Win GUI自启动快捷方式";
+            shortcut.IconLocation = targetPath + ",0"; // 使用应用程序自身的图标
+
+            // 保存快捷方式
+            shortcut.Save();
+
+            // 释放COM对象
+            System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shortcut);
+            System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell);
+        }
+
+        /// <summary>
+        /// 检查启动参数中是否包含指定的参数
+        /// </summary>
+        /// <param name="parameterName">要检查的参数名称，例如"-autoup"</param>
+        /// <returns>如果存在指定参数，则返回true；否则返回false</returns>
+        private bool CheckCommandLineParameter(string parameterName)
+        {
+            // 获取命令行参数数组
+            string[] args = Environment.GetCommandLineArgs();
+
+            // 遍历所有参数，检查是否有匹配的参数
+            foreach (string arg in args)
+            {
+                // 不区分大小写比较
+                if (string.Equals(arg, parameterName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void richTextBox1_DoubleClick(object sender, EventArgs e)
+        {
+            // 检查是否有日志内容
+            if (richTextBox1.TextLength > 0)
+            {
+                // 显示确认对话框，询问用户是否要清空日志
+                DialogResult result = MessageBox.Show(
+                    "是否要清空当前日志？",
+                    "清空日志确认",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question,
+                    MessageBoxDefaultButton.Button2); // 默认选择"否"按钮
+
+                if (result == DialogResult.Yes)
+                {
+                    // 清空richTextBox1内容
+                    richTextBox1.Clear();
+                    // 记录一条清空日志的操作信息
+                    Log("日志已清空");
+                }
             }
         }
     }
